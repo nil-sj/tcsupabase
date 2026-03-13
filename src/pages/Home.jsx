@@ -16,7 +16,9 @@ export default function Home() {
       // Grab a pool of recent public cards
       const { data: cards, error } = await supabase
         .from("resource_cards")
-        .select("id,title,short_description,link_url,category,created_at,visibility")
+        .select(
+  "id,title,short_description,link_url,category,created_at,visibility,thumbnail_source,auto_thumbnail_url,custom_thumbnail_path"
+)
         .eq("visibility", "public")
         .order("created_at", { ascending: false })
         .limit(60);

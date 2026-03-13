@@ -50,8 +50,8 @@ export default function Browse() {
       const { data, error } = await supabase
         .from("resource_cards")
         .select(
-          "id,title,short_description,link_url,category,created_at,url_normalized",
-        )
+  "id,title,short_description,link_url,category,created_at,visibility,thumbnail_source,auto_thumbnail_url,custom_thumbnail_path"
+)
         .eq("visibility", "public")
         .eq("category", category)
         .order("created_at", { ascending: false })
