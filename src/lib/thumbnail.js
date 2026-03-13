@@ -8,6 +8,7 @@ import templatesImg from "../assets/category-defaults/templates.png";
 import newslettersImg from "../assets/category-defaults/newsletters.png";
 import podcastsImg from "../assets/category-defaults/podcasts.png";
 import apisImg from "../assets/category-defaults/apis.png";
+import { getStoragePublicUrl } from "./storage";
 
 const CATEGORY_DEFAULTS = {
   Articles: articlesImg,
@@ -27,6 +28,19 @@ export function getCategoryDefaultImage(category) {
 }
 
 export function getThumbnailUrl(card) {
-  // later we will add custom and auto logic here
+  if (!card) return articlesImg;
+
+  if (card.thumbnail_source === "custom" && card.custom_thumbnail_path) {
+    return getStoragePublicUrl(card.custom_thumbnail_path);
+  }
+
+  if (
+    (card.thumbnail_source === "auto_social" ||
+      card.thumbnail_source === "auto_favicon") &&
+    card.auto_thumbnail_url
+  ) {
+    return card.auto_thumbnail_url;
+  }
+
   return getCategoryDefaultImage(card.category);
 }
