@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { getVoteTotals } from "../lib/social";
+import { getThumbnailUrl } from "../lib/thumbnail";
 
 export default function Home() {
   const [popular, setPopular] = useState([]);
@@ -79,6 +80,19 @@ function CardRow({ cards, scores }) {
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
       {cards.map((c) => (
         <div key={c.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+          <img
+            src={getThumbnailUrl(c)}
+            alt={c.title}
+            style={{
+              width: "100%",
+              height: 160,
+              objectFit: "cover",
+              borderRadius: 8,
+              marginBottom: 10,
+              background: "#f5f5f5",
+            }}
+          />
+
           <div style={{ fontSize: 12, opacity: 0.7 }}>ID: {c.id}</div>
           <div style={{ fontWeight: 700 }}>{c.title}</div>
           <div style={{ fontSize: 14, marginTop: 6 }}>{c.short_description}</div>

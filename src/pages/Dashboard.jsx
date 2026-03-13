@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { useNavigate } from "react-router-dom";
 import { normalizeUrl } from "../lib/normalizeUrl";
 import { getMyFavorites } from "../lib/social";
+import { getThumbnailUrl } from "../lib/thumbnail";
 
 const CATEGORIES = [
   "Articles",
@@ -315,6 +316,19 @@ export default function Dashboard() {
 
             return (
               <div key={c.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+
+                <img
+  src={getThumbnailUrl(c)}
+  alt={c.title}
+  style={{
+    width: 180,
+    height: 120,
+    objectFit: "cover",
+    borderRadius: 8,
+    marginBottom: 10,
+    background: "#f5f5f5",
+  }}
+/>
                 <div style={{ fontSize: 12, opacity: 0.7 }}>Resource ID: {c.id}</div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
