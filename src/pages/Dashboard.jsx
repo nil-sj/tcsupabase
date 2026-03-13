@@ -375,6 +375,18 @@ export default function Dashboard() {
   <div style={{ display: "grid", gap: 12 }}>
     {favoriteCards.map((c) => (
       <div key={c.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+        <img
+  src={getThumbnailUrl(c)}
+  alt={c.title}
+  style={{
+    width: 180,
+    height: 120,
+    objectFit: "cover",
+    borderRadius: 8,
+    marginBottom: 10,
+    background: "#f5f5f5",
+  }}
+/>
         <div style={{ fontSize: 12, opacity: 0.7 }}>Resource ID: {c.id}</div>
         <div style={{ fontWeight: 700 }}>{c.title}</div>
         {c.short_description && <div style={{ marginTop: 6 }}>{c.short_description}</div>}
