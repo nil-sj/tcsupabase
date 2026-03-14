@@ -34,13 +34,5 @@ export function getThumbnailUrl(card) {
     return getStoragePublicUrl(card.custom_thumbnail_path);
   }
 
-  if (
-    (card.thumbnail_source === "auto_social" ||
-      card.thumbnail_source === "auto_favicon") &&
-    card.auto_thumbnail_url
-  ) {
-    return card.auto_thumbnail_url;
-  }
-
   return getCategoryDefaultImage(card.category);
 }
