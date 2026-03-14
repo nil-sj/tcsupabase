@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useNavigate } from "react-router-dom";
 import { normalizeUrl } from "../lib/normalizeUrl";
-import { getMyFavorites } from "../lib/social";
 import { getThumbnailUrl } from "../lib/thumbnail";
 import { uploadCustomThumbnail, removeCustomThumbnail } from "../lib/storage";
 
@@ -25,6 +24,7 @@ export default function Dashboard() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [message, setMessage] = useState("");
 
   const [cards, setCards] = useState([]);
@@ -33,7 +33,14 @@ export default function Dashboard() {
 
   const [uploadingForId, setUploadingForId] = useState(null);
 
-  // form state
+  const [profile, setProfile] = useState({
+    first_name: "",
+    last_name: "",
+    username: "",
+    role: "user",
+    level: 1,
+  });
+
   const [editingId, setEditingId] = useState(null);
   const [title, setTitle] = useState("");
   const [shortDescription, setShortDescription] = useState("");
@@ -42,10 +49,67 @@ export default function Dashboard() {
 
   const userId = session?.user?.id;
 
+  const resetForm = () => {
+    setEditingId(null);
+    setTitle("");
+    setShortDescription("");
+    setLinkUrl("");
+    setCategory(CATEGORIES[0]);
+  };
+
+  const sortedCards = useMemo(() => {
+    return [...cards].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }, [cards]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      setSession(data.session);
+      setLoading(false);
+      if (!data.session) navigate("/auth");
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      if (!newSession) navigate("/auth");
+    });
+
+    return () => sub.subscription.unsubscribe();
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!userId) return;
+    fetchProfile();
+    fetchMyCards();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  const fetchProfile = async () => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("first_name,last_name,username,role,level")
+      .eq("id", userId)
+      .single();
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    if (data) {
+      setProfile({
+        first_name: data.first_name || "",
+        last_name: data.last_name || "",
+        username: data.username || "",
+        role: data.role || "user",
+        level: data.level || 1,
+      });
+    }
+  };
+
   const loadMyFavorites = async () => {
     setFavLoading(true);
     try {
-      // get all favorites for this user
       const { data: favRows, error: favErr } = await supabase
         .from("favorites")
         .select("resource_id")
@@ -63,7 +127,7 @@ export default function Dashboard() {
       const { data: res, error: resErr } = await supabase
         .from("resource_cards")
         .select(
-          "id,title,short_description,link_url,url_normalized,category,visibility,share_status,created_at,updated_at,thumbnail_path,thumbnail_source,auto_thumbnail_url,custom_thumbnail_path",
+          "id,title,short_description,link_url,category,visibility,share_status,created_at,thumbnail_source,custom_thumbnail_path"
         )
         .in("id", ids)
         .order("created_at", { ascending: false });
@@ -77,52 +141,12 @@ export default function Dashboard() {
     }
   };
 
-  const resetForm = () => {
-    setEditingId(null);
-    setTitle("");
-    setShortDescription("");
-    setLinkUrl("");
-    setCategory(CATEGORIES[0]);
-  };
-
-  const sortedCards = useMemo(() => {
-    return [...cards].sort(
-      (a, b) => new Date(b.created_at) - new Date(a.created_at),
-    );
-  }, [cards]);
-
-  // auth guard
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      setSession(data.session);
-      setLoading(false);
-      if (!data.session) navigate("/auth");
-    })();
-
-    const { data: sub } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
-        setSession(newSession);
-        if (!newSession) navigate("/auth");
-      },
-    );
-
-    return () => sub.subscription.unsubscribe();
-  }, [navigate]);
-
-  // load my cards
-  useEffect(() => {
-    if (!userId) return;
-    fetchMyCards();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
-
   const fetchMyCards = async () => {
     setMessage("");
     const { data, error } = await supabase
       .from("resource_cards")
       .select(
-        "id,title,short_description,link_url,url_normalized,category,visibility,share_status,created_at,updated_at,thumbnail_path,thumbnail_source,auto_thumbnail_url,custom_thumbnail_path",
+        "id,title,short_description,link_url,url_normalized,category,visibility,share_status,created_at,updated_at,thumbnail_path,thumbnail_source,custom_thumbnail_path"
       )
       .eq("owner_id", userId)
       .order("created_at", { ascending: false });
@@ -132,8 +156,34 @@ export default function Dashboard() {
       setMessage("❌ Failed to load your cards: " + error.message);
       return;
     }
+
     setCards(data || []);
     await loadMyFavorites();
+  };
+
+  const saveProfile = async (e) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    setMessage("");
+
+    const payload = {
+      first_name: profile.first_name.trim() || null,
+      last_name: profile.last_name.trim() || null,
+      username: profile.username.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from("profiles").update(payload).eq("id", userId);
+
+    if (error) {
+      setMessage("❌ Profile update failed: " + error.message);
+      setSavingProfile(false);
+      return;
+    }
+
+    setMessage("✅ Profile updated");
+    setSavingProfile(false);
+    await fetchProfile();
   };
 
   const startEdit = (card) => {
@@ -150,10 +200,7 @@ export default function Dashboard() {
     if (!confirm("Delete this card? This cannot be undone.")) return;
     setMessage("");
 
-    const { error } = await supabase
-      .from("resource_cards")
-      .delete()
-      .eq("id", cardId);
+    const { error } = await supabase.from("resource_cards").delete().eq("id", cardId);
 
     if (error) {
       setMessage("❌ Delete failed: " + error.message);
@@ -162,6 +209,7 @@ export default function Dashboard() {
 
     setMessage("✅ Deleted");
     setCards((prev) => prev.filter((c) => c.id !== cardId));
+    setFavoriteCards((prev) => prev.filter((c) => c.id !== cardId));
   };
 
   const saveCard = async (e) => {
@@ -176,7 +224,6 @@ export default function Dashboard() {
       if (!linkUrl.trim()) throw new Error("Link URL is required");
 
       if (editingId) {
-        // update
         const { data, error } = await supabase
           .from("resource_cards")
           .update({
@@ -197,7 +244,6 @@ export default function Dashboard() {
         setMessage("✅ Updated");
         resetForm();
       } else {
-        // insert (private by default)
         const { data, error } = await supabase
           .from("resource_cards")
           .insert({
@@ -207,7 +253,6 @@ export default function Dashboard() {
             link_url: linkUrl.trim(),
             url_normalized: urlNorm,
             category,
-            // visibility defaults to private, share_status defaults to none
           })
           .select()
           .single();
@@ -227,9 +272,7 @@ export default function Dashboard() {
 
   const requestShare = async (cardId) => {
     setMessage("");
-    const { error } = await supabase.rpc("request_share", {
-      p_resource_id: cardId,
-    });
+    const { error } = await supabase.rpc("request_share", { p_resource_id: cardId });
     if (error) {
       setMessage("❌ Share request failed: " + error.message);
       return;
@@ -309,9 +352,7 @@ export default function Dashboard() {
       setMessage("✅ Custom thumbnail removed");
       await fetchMyCards();
     } catch (err) {
-      setMessage(
-        "❌ Could not remove thumbnail: " + (err?.message || "Unknown error"),
-      );
+      setMessage("❌ Could not remove thumbnail: " + (err?.message || "Unknown error"));
     }
   };
 
@@ -325,17 +366,55 @@ export default function Dashboard() {
         Logged in as <b>{session.user.email}</b>
       </p>
 
-      <div
-        style={{
-          marginTop: 16,
-          border: "1px solid #eee",
-          padding: 12,
-          borderRadius: 8,
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>
-          {editingId ? "Edit resource" : "Create a new resource"}
-        </h3>
+      <div style={{ marginTop: 16, border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+        <h3 style={{ marginTop: 0 }}>My profile</h3>
+
+        <form onSubmit={saveProfile} style={{ display: "grid", gap: 10 }}>
+          <label>
+            First name
+            <input
+              value={profile.first_name}
+              onChange={(e) =>
+                setProfile((prev) => ({ ...prev, first_name: e.target.value }))
+              }
+              style={{ width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
+
+          <label>
+            Last name
+            <input
+              value={profile.last_name}
+              onChange={(e) =>
+                setProfile((prev) => ({ ...prev, last_name: e.target.value }))
+              }
+              style={{ width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
+
+          <label>
+            Username
+            <input
+              value={profile.username}
+              onChange={(e) =>
+                setProfile((prev) => ({ ...prev, username: e.target.value }))
+              }
+              style={{ width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
+
+          <div style={{ fontSize: 14, opacity: 0.85 }}>
+            Role: <b>{profile.role}</b> &nbsp; | &nbsp; Level: <b>{profile.level}</b>
+          </div>
+
+          <button disabled={savingProfile} type="submit" style={{ padding: 10 }}>
+            {savingProfile ? "Saving profile..." : "Save profile"}
+          </button>
+        </form>
+      </div>
+
+      <div style={{ marginTop: 16, border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+        <h3 style={{ marginTop: 0 }}>{editingId ? "Edit resource" : "Create a new resource"}</h3>
 
         <form onSubmit={saveCard} style={{ display: "grid", gap: 10 }}>
           <label>
@@ -400,9 +479,7 @@ export default function Dashboard() {
           </div>
 
           {message && (
-            <div
-              style={{ padding: 10, background: "#f6f6f6", borderRadius: 8 }}
-            >
+            <div style={{ padding: 10, background: "#f6f6f6", borderRadius: 8 }}>
               {message}
             </div>
           )}
@@ -422,51 +499,35 @@ export default function Dashboard() {
                 c.share_status === "duplicate");
 
             return (
-              <div
-                key={c.id}
-                style={{
-                  border: "1px solid #eee",
-                  padding: 12,
-                  borderRadius: 8,
-                }}
-              >
-                <img
-                  src={getThumbnailUrl(c)}
-                  alt={c.title}
-                  style={{
-                    width: 180,
-                    height: 120,
-                    objectFit: "cover",
-                    borderRadius: 8,
-                    marginBottom: 10,
-                    background: "#f5f5f5",
-                  }}
-                />
-                <div style={{ fontSize: 12, opacity: 0.7 }}>
-                  Resource ID: {c.id}
-                </div>
+              <div key={c.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+                <div style={{ fontSize: 12, opacity: 0.7 }}>Resource ID: {c.id}</div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                  }}
-                >
-                  <div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <img
+                      src={getThumbnailUrl(c)}
+                      alt={c.title}
+                      style={{
+                        width: 180,
+                        height: 120,
+                        objectFit: "cover",
+                        borderRadius: 8,
+                        marginBottom: 10,
+                        background: "#f5f5f5",
+                      }}
+                    />
+
                     <div style={{ fontWeight: 700 }}>{c.title}</div>
-                    {c.short_description && (
-                      <div style={{ marginTop: 6 }}>{c.short_description}</div>
-                    )}
+                    {c.short_description && <div style={{ marginTop: 6 }}>{c.short_description}</div>}
 
                     <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
-                      {c.category} • {c.visibility.toUpperCase()} • Share
-                      status: <b>{c.share_status}</b>
+                      {c.category} • {c.visibility.toUpperCase()} • Share status:{" "}
+                      <b>{c.share_status}</b>
                     </div>
 
                     <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
-  Thumbnail source: <b>{c.thumbnail_source || "default_category"}</b>
-</div>
+                      Thumbnail source: <b>{c.thumbnail_source || "default_category"}</b>
+                    </div>
 
                     <a
                       href={c.link_url}
@@ -478,16 +539,19 @@ export default function Dashboard() {
                     </a>
                   </div>
 
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 8,
-                      minWidth: 140,
-                    }}
-                  >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 180 }}>
                     <button onClick={() => startEdit(c)}>Edit</button>
                     <button onClick={() => removeCard(c.id)}>Delete</button>
+
+                    {canRequest ? (
+                      <button onClick={() => requestShare(c.id)}>Request to publish</button>
+                    ) : c.share_status === "pending" ? (
+                      <button disabled>Pending review</button>
+                    ) : c.visibility === "public" ? (
+                      <button disabled>Public</button>
+                    ) : (
+                      <button disabled>Not eligible</button>
+                    )}
 
                     <label style={{ fontSize: 12 }}>
                       Upload custom image
@@ -512,18 +576,6 @@ export default function Dashboard() {
                         Remove custom image
                       </button>
                     )}
-
-                    {canRequest ? (
-                      <button onClick={() => requestShare(c.id)}>
-                        Request to publish
-                      </button>
-                    ) : c.share_status === "pending" ? (
-                      <button disabled>Pending review</button>
-                    ) : c.visibility === "public" ? (
-                      <button disabled>Public</button>
-                    ) : (
-                      <button disabled>Not eligible</button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -531,6 +583,7 @@ export default function Dashboard() {
           })}
         </div>
       )}
+
       <h3 style={{ marginTop: 24 }}>My favorites</h3>
       {favLoading ? (
         <p>Loading favorites...</p>
@@ -539,10 +592,7 @@ export default function Dashboard() {
       ) : (
         <div style={{ display: "grid", gap: 12 }}>
           {favoriteCards.map((c) => (
-            <div
-              key={c.id}
-              style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}
-            >
+            <div key={c.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
               <img
                 src={getThumbnailUrl(c)}
                 alt={c.title}
@@ -555,13 +605,10 @@ export default function Dashboard() {
                   background: "#f5f5f5",
                 }}
               />
-              <div style={{ fontSize: 12, opacity: 0.7 }}>
-                Resource ID: {c.id}
-              </div>
+
+              <div style={{ fontSize: 12, opacity: 0.7 }}>Resource ID: {c.id}</div>
               <div style={{ fontWeight: 700 }}>{c.title}</div>
-              {c.short_description && (
-                <div style={{ marginTop: 6 }}>{c.short_description}</div>
-              )}
+              {c.short_description && <div style={{ marginTop: 6 }}>{c.short_description}</div>}
               <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
                 {c.category} • {c.visibility.toUpperCase()}
               </div>

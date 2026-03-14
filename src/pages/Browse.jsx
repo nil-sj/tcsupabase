@@ -36,9 +36,7 @@ export default function Browse() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) =>
-      setSession(s),
-    );
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -50,8 +48,8 @@ export default function Browse() {
       const { data, error } = await supabase
         .from("resource_cards")
         .select(
-  "id,title,short_description,link_url,category,created_at,visibility,thumbnail_source,auto_thumbnail_url,custom_thumbnail_path"
-)
+          "id,title,short_description,link_url,category,created_at,url_normalized,visibility,thumbnail_source,custom_thumbnail_path"
+        )
         .eq("visibility", "public")
         .eq("category", category)
         .order("created_at", { ascending: false })
@@ -78,7 +76,7 @@ export default function Browse() {
         setMyVotes(votes);
         setTotals(voteTotals);
       } catch (e) {
-        // ok if logged out; will just show buttons disabled
+        console.error(e);
       }
 
       setLoading(false);
@@ -104,7 +102,7 @@ export default function Browse() {
   const doVote = async (id, value) => {
     setMsg("");
     try {
-      const current = myVotes.get(id); // -1 | +1 | undefined
+      const current = myVotes.get(id);
       if (current === value) {
         await clearVote(id);
         const nextVotes = new Map(myVotes);
@@ -115,7 +113,6 @@ export default function Browse() {
         nextTotals.set(id, (nextTotals.get(id) || 0) - value);
         setTotals(nextTotals);
       } else {
-        // if switching from -1 to +1 or vice versa adjust totals
         await setVote(id, value);
 
         const nextTotals = new Map(totals);
@@ -162,27 +159,14 @@ export default function Browse() {
       ) : cards.length === 0 ? (
         <p>No public cards in this category yet.</p>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 12,
-          }}
-        >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
           {cards.map((c) => {
             const score = totals.get(c.id) || 0;
-            const mine = myVotes.get(c.id); // -1, +1, undefined
+            const mine = myVotes.get(c.id);
             const isFav = favSet.has(c.id);
 
             return (
-              <div
-                key={c.id}
-                style={{
-                  border: "1px solid #eee",
-                  padding: 12,
-                  borderRadius: 8,
-                }}
-              >
+              <div key={c.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
                 <img
                   src={getThumbnailUrl(c)}
                   alt={c.title}
@@ -195,14 +179,12 @@ export default function Browse() {
                     background: "#f5f5f5",
                   }}
                 />
+
                 <div style={{ fontSize: 12, opacity: 0.7 }}>ID: {c.id}</div>
                 <div style={{ fontWeight: 700 }}>{c.title}</div>
-                {c.short_description && (
-                  <div style={{ marginTop: 6 }}>{c.short_description}</div>
-                )}
+                {c.short_description && <div style={{ marginTop: 6 }}>{c.short_description}</div>}
                 <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
-                  Score: <b>{score}</b> •{" "}
-                  {new Date(c.created_at).toLocaleDateString()}
+                  Score: <b>{score}</b> • {new Date(c.created_at).toLocaleDateString()}
                 </div>
 
                 <a
