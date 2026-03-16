@@ -3,9 +3,9 @@ import Navbar from "./Navbar";
 
 export default function Layout() {
   return (
-    <div style={{ fontFamily: "system-ui" }}>
+    <div className="app-shell">
       <Navbar />
-      <div style={{ maxWidth: 1000, margin: "0 auto", padding: 16 }}>
+      <div className="page-container">
         <Outlet />
       </div>
     </div>

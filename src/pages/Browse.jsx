@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import {
   clearVote,
@@ -11,28 +12,26 @@ import {
 import { getThumbnailUrl } from "../lib/thumbnail";
 
 const CATEGORIES = [
-  "Articles",
-  "Books",
-  "Courses",
-  "YouTube Videos",
-  "GitHub Repos",
-  "Cheat Sheets",
-  "Templates",
-  "Newsletters",
-  "Podcasts",
-  "APIs",
+  "Articles","Books","Courses","YouTube Videos","GitHub Repos",
+  "Cheat Sheets","Templates","Newsletters","Podcasts","APIs",
 ];
+
+const CATEGORY_ICONS = {
+  "Articles": "📄", "Books": "📚", "Courses": "🎓",
+  "YouTube Videos": "▶️", "GitHub Repos": "🐙", "Cheat Sheets": "📋",
+  "Templates": "🗂️", "Newsletters": "📨", "Podcasts": "🎙️", "APIs": "⚡",
+};
 
 export default function Browse() {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [session, setSession] = useState(null);
   const [favSet, setFavSet] = useState(new Set());
   const [myVotes, setMyVotes] = useState(new Map());
   const [totals, setTotals] = useState(new Map());
   const [msg, setMsg] = useState("");
+  const [msgType, setMsgType] = useState("info");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -47,20 +46,13 @@ export default function Browse() {
 
       const { data, error } = await supabase
         .from("resource_cards")
-        .select(
-          "id,title,short_description,link_url,category,created_at,url_normalized,visibility,thumbnail_source,custom_thumbnail_path"
-        )
+        .select("id,title,short_description,link_url,category,created_at,url_normalized,visibility,thumbnail_source,custom_thumbnail_path")
         .eq("visibility", "public")
         .eq("category", category)
         .order("created_at", { ascending: false })
         .limit(60);
 
-      if (error) {
-        console.error(error);
-        setCards([]);
-        setLoading(false);
-        return;
-      }
+      if (error) { setCards([]); setLoading(false); return; }
 
       const list = data || [];
       setCards(list);
@@ -68,152 +60,153 @@ export default function Browse() {
       const ids = list.map((c) => c.id);
       try {
         const [favs, votes, voteTotals] = await Promise.all([
-          getMyFavorites(ids),
-          getMyVotes(ids),
-          getVoteTotals(ids),
+          getMyFavorites(ids), getMyVotes(ids), getVoteTotals(ids),
         ]);
         setFavSet(favs);
         setMyVotes(votes);
         setTotals(voteTotals);
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) { console.error(e); }
 
       setLoading(false);
     })();
   }, [category, session]);
 
-  const title = useMemo(() => `Browse: ${category}`, [category]);
+  const showMsg = (text, type = "info") => { setMsg(text); setMsgType(type); };
 
   const doToggleFav = async (id) => {
-    setMsg("");
+    if (!session) { showMsg("Sign in to save favorites", "warning"); return; }
     try {
       const isFav = favSet.has(id);
       await toggleFavorite(id, !isFav);
       const next = new Set(favSet);
-      if (isFav) next.delete(id);
-      else next.add(id);
+      if (isFav) next.delete(id); else next.add(id);
       setFavSet(next);
-    } catch (e) {
-      setMsg("❌ " + e.message);
-    }
+    } catch (e) { showMsg(e.message, "danger"); }
   };
 
   const doVote = async (id, value) => {
-    setMsg("");
+    if (!session) { showMsg("Sign in to vote", "warning"); return; }
     try {
       const current = myVotes.get(id);
       if (current === value) {
         await clearVote(id);
-        const nextVotes = new Map(myVotes);
-        nextVotes.delete(id);
-        setMyVotes(nextVotes);
-
-        const nextTotals = new Map(totals);
-        nextTotals.set(id, (nextTotals.get(id) || 0) - value);
-        setTotals(nextTotals);
+        const nv = new Map(myVotes); nv.delete(id); setMyVotes(nv);
+        const nt = new Map(totals); nt.set(id, (nt.get(id) || 0) - value); setTotals(nt);
       } else {
         await setVote(id, value);
-
-        const nextTotals = new Map(totals);
         const prev = current || 0;
-        nextTotals.set(id, (nextTotals.get(id) || 0) - prev + value);
-        setTotals(nextTotals);
-
-        const nextVotes = new Map(myVotes);
-        nextVotes.set(id, value);
-        setMyVotes(nextVotes);
+        const nt = new Map(totals); nt.set(id, (nt.get(id) || 0) - prev + value); setTotals(nt);
+        const nv = new Map(myVotes); nv.set(id, value); setMyVotes(nv);
       }
-    } catch (e) {
-      setMsg("❌ " + e.message);
-    }
+    } catch (e) { showMsg(e.message, "danger"); }
   };
 
   return (
     <div>
-      <h2>{title}</h2>
+      {/* Page header */}
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: "1.6rem", marginBottom: "6px" }}>
+          {CATEGORY_ICONS[category]} {category}
+        </h1>
+        <p style={{ color: "var(--text-secondary)", margin: 0 }}>
+          Browse public resources curated by the community.
+        </p>
+      </div>
 
-      <label style={{ display: "block", marginBottom: 12 }}>
-        Category:
+      {/* Filter bar */}
+      <div className="filter-bar">
+        <span className="filter-label">Category</span>
         <select
+          className="form-control"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          style={{ marginLeft: 8, padding: 6 }}
+          style={{ maxWidth: 200 }}
         >
           {CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
+            <option key={c} value={c}>{CATEGORY_ICONS[c]} {c}</option>
           ))}
         </select>
-      </label>
+
+        {!session && (
+          <div style={{ marginLeft: "auto", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            <Link to="/auth">Sign in</Link> to vote &amp; save favorites
+          </div>
+        )}
+      </div>
 
       {msg && (
-        <div style={{ padding: 10, background: "#f6f6f6", borderRadius: 8 }}>
+        <div className={`tc-alert tc-alert-${msgType}`}>
           {msg}
         </div>
       )}
 
       {loading ? (
-        <p>Loading...</p>
+        <div className="tc-loading-page">
+          <div className="tc-spinner" />
+          <span>Loading {category}…</span>
+        </div>
       ) : cards.length === 0 ? (
-        <p>No public cards in this category yet.</p>
+        <div className="empty-state">
+          <div className="empty-state-icon">{CATEGORY_ICONS[category]}</div>
+          <div className="empty-state-title">No {category} yet</div>
+          <div className="empty-state-desc">Be the first to submit a resource in this category.</div>
+        </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+        <div className="cards-grid">
           {cards.map((c) => {
             const score = totals.get(c.id) || 0;
             const mine = myVotes.get(c.id);
             const isFav = favSet.has(c.id);
 
             return (
-              <div key={c.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+              <div key={c.id} className="resource-card">
                 <img
                   src={getThumbnailUrl(c)}
                   alt={c.title}
-                  style={{
-                    width: "100%",
-                    height: 160,
-                    objectFit: "cover",
-                    borderRadius: 8,
-                    marginBottom: 10,
-                    background: "#f5f5f5",
-                  }}
+                  className="resource-card-img"
                 />
-
-                <div style={{ fontSize: 12, opacity: 0.7 }}>ID: {c.id}</div>
-                <div style={{ fontWeight: 700 }}>{c.title}</div>
-                {c.short_description && <div style={{ marginTop: 6 }}>{c.short_description}</div>}
-                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
-                  Score: <b>{score}</b> • {new Date(c.created_at).toLocaleDateString()}
-                </div>
-
-                <a
-                  href={c.link_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ display: "inline-block", marginTop: 8 }}
-                >
-                  Open link
-                </a>
-
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <button disabled={!session} onClick={() => doVote(c.id, +1)}>
-                    {mine === 1 ? "👍 Upvoted" : "👍 Upvote"}
-                  </button>
-                  <button disabled={!session} onClick={() => doVote(c.id, -1)}>
-                    {mine === -1 ? "👎 Downvoted" : "👎 Downvote"}
-                  </button>
-                </div>
-
-                <div style={{ marginTop: 8 }}>
-                  <button disabled={!session} onClick={() => doToggleFav(c.id)}>
-                    {isFav ? "★ Favorited" : "☆ Favorite"}
-                  </button>
-                  {!session && (
-                    <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>
-                      Login to vote or favorite
-                    </div>
+                <div className="resource-card-body">
+                  <div className="resource-card-id">{c.id}</div>
+                  <div className="resource-card-title">{c.title}</div>
+                  {c.short_description && (
+                    <div className="resource-card-desc">{c.short_description}</div>
                   )}
+
+                  <div className="resource-card-meta">
+                    <span className={`vote-score ${score > 0 ? "positive" : score < 0 ? "negative" : ""}`}>
+                      {score > 0 ? "▲" : score < 0 ? "▼" : "●"} {Math.abs(score)}
+                    </span>
+                    <span style={{ opacity: 0.5 }}>·</span>
+                    <span>{new Date(c.created_at).toLocaleDateString()}</span>
+                  </div>
+
+                  <div className="resource-card-actions">
+                    <a href={c.link_url} target="_blank" rel="noreferrer" className="btn-open-link">
+                      Open ↗
+                    </a>
+
+                    <button
+                      className={`btn-tc btn-sm ${mine === 1 ? "btn-success" : "btn-ghost"}`}
+                      onClick={() => doVote(c.id, +1)}
+                      title="Upvote"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      className={`btn-tc btn-sm ${mine === -1 ? "btn-danger" : "btn-ghost"}`}
+                      onClick={() => doVote(c.id, -1)}
+                      title="Downvote"
+                    >
+                      ▼
+                    </button>
+                    <button
+                      className={`btn-tc btn-sm ${isFav ? "btn-warning" : "btn-ghost"}`}
+                      onClick={() => doToggleFav(c.id)}
+                      title={isFav ? "Remove from favorites" : "Add to favorites"}
+                    >
+                      {isFav ? "★" : "☆"}
+                    </button>
+                  </div>
                 </div>
               </div>
             );

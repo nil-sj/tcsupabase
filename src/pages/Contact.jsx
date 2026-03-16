@@ -1,16 +1,20 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
+function Alert({ msg }) {
+  if (!msg) return null;
+  const isSuccess = msg.startsWith("✅");
+  const isError = msg.startsWith("❌");
+  const type = isSuccess ? "success" : isError ? "danger" : "info";
+  return <div className={`tc-alert tc-alert-${type}`}>{msg}</div>;
+}
+
 export default function Contact() {
   const [session, setSession] = useState(null);
-
-  // Contact form
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [messageText, setMessageText] = useState("");
   const [contactMsg, setContactMsg] = useState("");
-
-  // Report form
   const [resourceId, setResourceId] = useState("");
   const [issue, setIssue] = useState("");
   const [reportMsg, setReportMsg] = useState("");
@@ -24,120 +28,88 @@ export default function Contact() {
   const submitContact = async (e) => {
     e.preventDefault();
     setContactMsg("");
-
     const { data: sess } = await supabase.auth.getSession();
     const userId = sess?.session?.user?.id || null;
-
     const { error } = await supabase.from("contact_messages").insert({
-      user_id: userId,
-      name: name.trim() || null,
-      email: email.trim() || null,
-      message: messageText.trim(),
+      user_id: userId, name: name.trim() || null, email: email.trim() || null, message: messageText.trim(),
     });
-
-    if (error) {
-      setContactMsg("❌ " + error.message);
-      return;
-    }
-
-    setContactMsg("✅ Sent! Thanks.");
-    setName("");
-    setEmail("");
-    setMessageText("");
+    if (error) { setContactMsg("❌ " + error.message); return; }
+    setContactMsg("✅ Message sent! We'll get back to you soon.");
+    setName(""); setEmail(""); setMessageText("");
   };
 
   const submitReport = async (e) => {
     e.preventDefault();
     setReportMsg("");
-
     const { data: sess } = await supabase.auth.getSession();
     const userId = sess?.session?.user?.id || null;
-
     const { error } = await supabase.from("resource_reports").insert({
-      user_id: userId,
-      resource_id: resourceId.trim() || null,
-      issue: issue.trim(),
+      user_id: userId, resource_id: resourceId.trim() || null, issue: issue.trim(),
     });
-
-    if (error) {
-      setReportMsg("❌ " + error.message);
-      return;
-    }
-
-    setReportMsg("✅ Report submitted. Thank you!");
-    setResourceId("");
-    setIssue("");
+    if (error) { setReportMsg("❌ " + error.message); return; }
+    setReportMsg("✅ Report submitted — thank you!");
+    setResourceId(""); setIssue("");
   };
 
   return (
-    <div style={{ maxWidth: 720 }}>
-      <h2>Contact</h2>
-      <p>{session ? "You’re logged in." : "You can submit forms while logged out too."}</p>
+    <div style={{ maxWidth: 800 }}>
+      {/* Header */}
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: "1.6rem", marginBottom: "6px" }}>Get in touch</h1>
+        <p style={{ color: "var(--text-secondary)", margin: 0 }}>
+          {session ? `Logged in as ${session.user.email}` : "You can reach us while logged out too."}
+        </p>
+      </div>
 
-      <div style={{ display: "grid", gap: 16 }}>
-        <div style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
-          <h3 style={{ marginTop: 0 }}>Contact form</h3>
-          <form onSubmit={submitContact} style={{ display: "grid", gap: 10 }}>
-            <label>
-              Name
-              <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%", padding: 8, marginTop: 4 }} />
-            </label>
-
-            <label>
-              Email (optional)
-              <input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%", padding: 8, marginTop: 4 }} />
-            </label>
-
-            <label>
-              Message *
-              <textarea
-                value={messageText}
-                onChange={(e) => setMessageText(e.target.value)}
-                required
-                style={{ width: "100%", padding: 8, marginTop: 4, minHeight: 90 }}
-              />
-            </label>
-
-            <button type="submit" style={{ padding: 10 }}>
+      <div className="contact-grid">
+        {/* Contact form */}
+        <div className="tc-panel">
+          <div className="tc-panel-header">
+            <div className="tc-panel-icon">💬</div>
+            <h3 className="tc-panel-title">Send a message</h3>
+          </div>
+          <form onSubmit={submitContact}>
+            <div className="form-group">
+              <label className="form-label">Name</label>
+              <input className="form-control" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Email (optional)</label>
+              <input className="form-control" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Message *</label>
+              <textarea className="form-control" value={messageText} onChange={(e) => setMessageText(e.target.value)} required placeholder="What's on your mind?" style={{ minHeight: 100 }} />
+            </div>
+            <button type="submit" className="btn-tc btn-primary" style={{ width: "100%", justifyContent: "center" }}>
               Send message
             </button>
-
-            {contactMsg && <div style={{ padding: 10, background: "#f6f6f6", borderRadius: 8 }}>{contactMsg}</div>}
+            <Alert msg={contactMsg} />
           </form>
         </div>
 
-        <div style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
-          <h3 style={{ marginTop: 0 }}>Report / Correction</h3>
-          <p style={{ fontSize: 13, opacity: 0.8 }}>
-            Please include the Resource ID shown on the card (if you have it).
+        {/* Report form */}
+        <div className="tc-panel">
+          <div className="tc-panel-header">
+            <div className="tc-panel-icon">🚩</div>
+            <h3 className="tc-panel-title">Report an issue</h3>
+          </div>
+          <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: 16 }}>
+            Found a broken link, wrong category, or duplicate? Include the Resource ID shown on the card if possible.
           </p>
-          <form onSubmit={submitReport} style={{ display: "grid", gap: 10 }}>
-            <label>
-              Resource ID (optional)
-              <input
-                value={resourceId}
-                onChange={(e) => setResourceId(e.target.value)}
-                placeholder="e.g., 2b7b...-uuid"
-                style={{ width: "100%", padding: 8, marginTop: 4 }}
-              />
-            </label>
-
-            <label>
-              Issue *
-              <textarea
-                value={issue}
-                onChange={(e) => setIssue(e.target.value)}
-                required
-                style={{ width: "100%", padding: 8, marginTop: 4, minHeight: 90 }}
-                placeholder="What’s wrong? Broken link? Wrong category? Duplicate? etc."
-              />
-            </label>
-
-            <button type="submit" style={{ padding: 10 }}>
+          <form onSubmit={submitReport}>
+            <div className="form-group">
+              <label className="form-label">Resource ID (optional)</label>
+              <input className="form-control" value={resourceId} onChange={(e) => setResourceId(e.target.value)} placeholder="e.g. 2b7b…-uuid" style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem" }} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Describe the issue *</label>
+              <textarea className="form-control" value={issue} onChange={(e) => setIssue(e.target.value)} required placeholder="Broken link? Wrong category? Duplicate? Spam?" style={{ minHeight: 100 }} />
+            </div>
+            <button type="submit" className="btn-tc btn-ghost" style={{ width: "100%", justifyContent: "center" }}>
               Submit report
             </button>
-
-            {reportMsg && <div style={{ padding: 10, background: "#f6f6f6", borderRadius: 8 }}>{reportMsg}</div>}
+            <Alert msg={reportMsg} />
           </form>
         </div>
       </div>
