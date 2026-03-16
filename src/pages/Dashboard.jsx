@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { normalizeUrl } from "../lib/normalizeUrl";
 import { getThumbnailUrl } from "../lib/thumbnail";
 import { uploadCustomThumbnail, removeCustomThumbnail } from "../lib/storage";
+import { isAdmin } from "../lib/isAdmin";
 
 const CATEGORIES = [
   "Articles","Books","Courses","YouTube Videos","GitHub Repos",
@@ -33,6 +34,9 @@ export default function Dashboard() {
   const [favoriteCards, setFavoriteCards] = useState([]);
   const [favLoading, setFavLoading] = useState(false);
   const [uploadingForId, setUploadingForId] = useState(null);
+
+  const [adminUser, setAdminUser] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const [profile, setProfile] = useState({ first_name: "", last_name: "", username: "", role: "user", level: 1 });
   const [editingId, setEditingId] = useState(null);
@@ -67,7 +71,19 @@ export default function Dashboard() {
     if (!userId) return;
     fetchProfile();
     fetchMyCards();
+    checkAdminAndPending();
   }, [userId]);
+
+  const checkAdminAndPending = async () => {
+    const ok = await isAdmin();
+    setAdminUser(ok);
+    if (!ok) return;
+    const { count } = await supabase
+      .from("resource_share_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending");
+    setPendingCount(count || 0);
+  };
 
   const fetchProfile = async () => {
     const { data } = await supabase.from("profiles").select("first_name,last_name,username,role,level").eq("id", userId).single();
@@ -319,6 +335,70 @@ export default function Dashboard() {
 
         {/* Right column: My cards */}
         <div className="col-lg-7">
+
+          {/* Admin pending-review notification */}
+          {adminUser && (
+            <div style={{
+              background: pendingCount > 0
+                ? "linear-gradient(135deg, rgba(251,191,36,0.08) 0%, rgba(79,142,255,0.06) 100%)"
+                : "rgba(52,211,153,0.05)",
+              border: `1px solid ${pendingCount > 0 ? "rgba(251,191,36,0.3)" : "rgba(52,211,153,0.2)"}`,
+              borderRadius: "var(--radius-md)",
+              padding: "18px 20px",
+              marginBottom: "24px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{
+                  width: 40, height: 40,
+                  background: pendingCount > 0 ? "rgba(251,191,36,0.15)" : "rgba(52,211,153,0.12)",
+                  border: `1px solid ${pendingCount > 0 ? "rgba(251,191,36,0.35)" : "rgba(52,211,153,0.25)"}`,
+                  borderRadius: "10px",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "1.1rem", flexShrink: 0,
+                }}>
+                  {pendingCount > 0 ? "🔔" : "✅"}
+                </div>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                      Admin
+                    </span>
+                    {pendingCount > 0 && (
+                      <span style={{
+                        background: "var(--warning)", color: "#000",
+                        fontSize: "0.68rem", fontWeight: 700,
+                        padding: "1px 7px", borderRadius: "10px",
+                        fontVariantNumeric: "tabular-nums",
+                      }}>
+                        {pendingCount}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text-primary)" }}>
+                    {pendingCount > 0
+                      ? `${pendingCount} request${pendingCount > 1 ? "s" : ""} awaiting review`
+                      : "No pending review requests"}
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: 1 }}>
+                    {pendingCount > 0
+                      ? "Users have submitted resources for you to accept, deny, or flag."
+                      : "You're all caught up — nothing to review right now."}
+                  </div>
+                </div>
+              </div>
+              {pendingCount > 0 && (
+                <Link to="/admin/review" className="btn-tc btn-warning" style={{ flexShrink: 0 }}>
+                  Review now →
+                </Link>
+              )}
+            </div>
+          )}
+
           <div className="section-header">
             <h2 className="section-title">My Cards</h2>
             <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{sortedCards.length} total</span>
